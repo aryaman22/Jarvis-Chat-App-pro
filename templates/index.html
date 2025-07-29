@@ -1,0 +1,1119 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Jarvis Chat Room - {{ room_name }}</title>
+  <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="description" content="Jarvis Chat Room for real-time messaging and AI assistance">
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --fg: #333;
+      --sidebar-bg: rgba(255,255,255,0.95);
+      --border: #e0e0e0;
+      --jarvis-bg: rgba(102,126,234,0.1);
+      --jarvis-fg: #667eea;
+      --input-bg: white;
+      --button-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --button-fg: white;
+      --highlight: rgba(102,126,234,0.2);
+      --error: #dc3545;
+    }
+    [data-theme="dark"] {
+      --bg: linear-gradient(135deg, #2a2a4a 0%, #3a2a5a 100%);
+      --fg: #ddd;
+      --sidebar-bg: rgba(40,40,60,0.95);
+      --border: #444;
+      --jarvis-bg: rgba(77,171,247,0.2);
+      --jarvis-fg: #4dabf7;
+      --input-bg: #333;
+      --button-bg: linear-gradient(135deg, #4dabf7 0%, #764ba2 100%);
+      --button-fg: white;
+      --highlight: rgba(77,171,247,0.3);
+      --error: #ff6666;
+    }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      margin: 0; padding: 0; height: 100vh; display: flex;
+      background: var(--bg);
+      color: var(--fg);
+      transition: all 0.3s ease;
+    }
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      padding: 15px 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: white;
+      z-index: 1000;
+      height: 70px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.5em;
+    }
+    .header-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    .header-btn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 15px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      font-size: 0.9em;
+      font-weight: 600;
+    }
+    .header-btn:hover {
+      background: rgba(255,255,255,0.3);
+      transform: translateY(-2px);
+    }
+    #sidebar { 
+      width: 320px; 
+      border-right: 2px solid var(--border); 
+      padding: 20px; 
+      background: var(--sidebar-bg);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      margin-top: 70px;
+      height: calc(100vh - 70px);
+    }
+    #main { 
+      flex: 1; 
+      display: flex; 
+      flex-direction: column; 
+      background: var(--sidebar-bg);
+      backdrop-filter: blur(10px);
+      margin-top: 70px;
+      height: calc(100vh - 70px);
+    }
+    #chatBox { 
+      flex: 1; 
+      overflow-y: auto; 
+      padding: 20px; 
+      background: transparent;
+      scroll-behavior: smooth;
+    }
+    .msg { 
+      margin: 12px 0; 
+      padding: 16px 20px;
+      border-radius: 20px;
+      max-width: 80%;
+      word-wrap: break-word;
+      animation: slideIn 0.4s ease-out;
+      box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+      position: relative;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .user-msg { 
+      background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+      color: white;
+      margin-left: auto;
+      border-bottom-right-radius: 8px;
+    }
+    .jarvis-msg { 
+      background: var(--jarvis-bg);
+      color: var(--jarvis-fg);
+      margin-right: auto;
+      border-bottom-left-radius: 8px;
+      box-shadow: 0 4px 25px rgba(102, 126, 234, 0.4);
+    }
+    .jarvis-msg::before {
+      content: "🤖";
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      background: white;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+    .summary-msg {
+      background: var(--highlight);
+      border: 2px solid var(--jarvis-fg);
+      margin: 15px auto;
+      padding: 15px;
+      max-width: 90%;
+      font-weight: bold;
+    }
+    .system-msg {
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+      color: white;
+      margin: 10px auto;
+      text-align: center;
+      border-radius: 25px;
+      font-size: 0.9em;
+      max-width: 70%;
+    }
+    .file-msg {
+      background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+      color: #333;
+      margin-right: auto;
+      border-left: 4px solid #ff9800;
+    }
+    .mention-msg {
+      border: 2px solid #17a2b8;
+      background: linear-gradient(135deg, rgba(23, 162, 184, 0.1) 0%, rgba(19, 132, 150, 0.1) 100%);
+    }
+    .mention {
+      background: rgba(23, 162, 184, 0.3);
+      padding: 2px 6px;
+      border-radius: 8px;
+      color: #17a2b8;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .timestamp { 
+      font-size: 0.75em; 
+      opacity: 0.8; 
+      margin-top: 8px;
+      display: block;
+      font-weight: normal;
+      text-align: right;
+    }
+    .reactions {
+      font-size: 0.9em;
+      margin-top: 5px;
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .reaction-btn {
+      cursor: pointer;
+      padding: 2px 5px;
+      background: none;
+      border: none;
+      font-size: 1em;
+      transition: all 0.3s ease;
+    }
+    .reaction-btn:hover {
+      background: var(--highlight);
+      border-radius: 10px;
+    }
+    #inputArea { 
+      display: flex; 
+      padding: 25px; 
+      border-top: 2px solid var(--border);
+      background: var(--sidebar-bg);
+      gap: 12px;
+      backdrop-filter: blur(10px);
+      align-items: center;
+    }
+    #message { 
+      flex: 1; 
+      padding: 15px 20px; 
+      font-size: 1em;
+      border: 2px solid var(--border);
+      border-radius: 30px;
+      outline: none;
+      transition: all 0.3s ease;
+      background: var(--input-bg);
+      color: var(--fg);
+    }
+    #message:focus {
+      border-color: var(--jarvis-fg);
+      box-shadow: 0 0 0 3px var(--highlight);
+    }
+    #message:disabled, button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    button { 
+      padding: 15px 25px; 
+      font-size: 1em;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    #sendBtn {
+      background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+      color: white;
+      min-width: 100px;
+    }
+    #jarvisBtn {
+      background: var(--button-bg);
+      color: var(--button-fg);
+      min-width: 120px;
+    }
+    #fileBtn {
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+      color: white;
+      min-width: 80px;
+      padding: 15px 20px;
+    }
+    button:hover:not(:disabled) {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    button:active:not(:disabled) {
+      transform: translateY(-1px);
+    }
+    .feature-section {
+      margin: 20px 0;
+      padding: 20px;
+      background: var(--jarvis-bg);
+      border-radius: 15px;
+      border: 2px solid var(--jarvis-fg);
+    }
+    .feature-section h4 {
+      margin: 0 0 15px 0;
+      color: var(--jarvis-fg);
+      font-size: 1.1em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #userList {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #userList li {
+      padding: 12px 16px;
+      margin: 6px 0;
+      background: var(--jarvis-bg);
+      border-radius: 15px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.3s ease;
+    }
+    #userList li:hover {
+      background: var(--highlight);
+      transform: translateX(5px);
+    }
+    .online-indicator {
+      width: 10px;
+      height: 10px;
+      background: #28a745;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 12px;
+      animation: pulse 2s infinite;
+    }
+    .role-badge {
+      font-size: 0.7em;
+      padding: 3px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+    .role-admin { background: #dc3545; color: white; }
+    .role-user { background: #6c757d; color: white; }
+    .kick-btn {
+      padding: 5px 10px;
+      font-size: 0.7em;
+      background: #dc3545;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-left: 10px;
+      transition: all 0.3s ease;
+    }
+    .kick-btn:hover {
+      background: #c82333;
+      transform: translateY(-2px);
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+    }
+    #typingIndicator {
+      padding: 10px 25px;
+      font-style: italic;
+      color: #666;
+      min-height: 35px;
+      background: var(--input-bg);
+      margin: 0 20px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+    }
+    .typing-dots {
+      display: inline-block;
+      margin-left: 8px;
+    }
+    .typing-dots span {
+      display: inline-block;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--jarvis-fg);
+      margin: 0 1px;
+      animation: typing 1.4s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-10px); }
+    }
+    .feature-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 15px;
+    }
+    .feature-btn {
+      padding: 10px 15px;
+      font-size: 0.85em;
+      background: var(--jarvis-bg);
+      color: var(--jarvis-fg);
+      border: 2px solid var(--jarvis-fg);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+    .feature-btn:hover {
+      background: var(--jarvis-fg);
+      color: white;
+      transform: translateY(-2px);
+    }
+    #modelSelector {
+      width: 100%;
+      padding: 12px 16px;
+      margin: 10px 0;
+      border: 2px solid var(--jarvis-fg);
+      border-radius: 12px;
+      background: var(--input-bg);
+      font-size: 0.9em;
+      outline: none;
+      transition: all 0.3s ease;
+      color: var(--fg);
+    }
+    #modelSelector:focus {
+      border-color: var(--jarvis-fg);
+      box-shadow: 0 0 0 3px var(--highlight);
+    }
+    #modelInfo {
+      padding: 15px;
+      background: var(--jarvis-bg);
+      border-radius: 15px;
+      margin-top: 15px;
+      font-size: 0.9em;
+      border: 2px solid var(--jarvis-fg);
+    }
+    .msg-header {
+      font-weight: bold;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+    .ai-badge {
+      background: rgba(255,255,255,0.3);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.7em;
+      font-weight: normal;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .file-download {
+      background: rgba(255,255,255,0.2);
+      padding: 8px 16px;
+      border-radius: 10px;
+      margin-top: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: inline-block;
+      color: var(--fg);
+    }
+    .file-download:hover {
+      background: rgba(255,255,255,0.3);
+      transform: translateY(-2px);
+    }
+    .notification {
+      position: fixed;
+      top: 95px;
+      right: 25px;
+      padding: 15px 25px;
+      border-radius: 15px;
+      color: white;
+      font-weight: 600;
+      z-index: 1000;
+      animation: slideInRight 0.4s ease;
+      max-width: 350px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .notification.success { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
+    .notification.error { background: var(--error); }
+    .notification.info { background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); }
+    .notification.warning { background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #333; }
+    #fileInput {
+      display: none;
+    }
+    .drag-drop-area {
+      border: 2px dashed var(--jarvis-fg);
+      border-radius: 15px;
+      padding: 20px;
+      text-align: center;
+      margin: 10px 0;
+      transition: all 0.3s ease;
+      background: var(--jarvis-bg);
+    }
+    .drag-drop-area.dragover {
+      border-color: var(--jarvis-fg);
+      background: var(--highlight);
+      transform: scale(1.02);
+    }
+    .jarvis-msg ul, .summary-msg ul {
+      padding-left: 20px;
+      margin: 10px 0;
+    }
+    .jarvis-msg li, .summary-msg li {
+      margin: 5px 0;
+    }
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      #sidebar { 
+        width: 100%; 
+        height: 250px; 
+        border-right: none;
+        border-bottom: 2px solid var(--border);
+        overflow-y: auto;
+        padding: 15px;
+      }
+      #main { height: calc(100vh - 320px); }
+      .msg { max-width: 95%; }
+      .feature-buttons {
+        grid-template-columns: 1fr;
+      }
+      #inputArea {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      #message {
+        width: 100%;
+        margin-bottom: 8px;
+      }
+      button {
+        flex: 1;
+        min-width: auto;
+      }
+    }
+    #chatBox::-webkit-scrollbar, #userList::-webkit-scrollbar {
+      width: 6px;
+    }
+    #chatBox::-webkit-scrollbar-track, #userList::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.1);
+      border-radius: 10px;
+    }
+    #chatBox::-webkit-scrollbar-thumb, #userList::-webkit-scrollbar-thumb {
+      background: var(--jarvis-fg);
+      border-radius: 10px;
+    }
+    #chatBox::-webkit-scrollbar-thumb:hover, #userList::-webkit-scrollbar-thumb:hover {
+      background: var(--highlight);
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header" role="banner">
+    <h1>🤖 {{ room_name }} - Jarvis Chat</h1>
+    <div class="header-buttons">
+      <button id="themeToggle" class="header-btn" aria-label="Toggle dark mode" onclick="toggleTheme()">🌙 Dark Mode</button>
+      <a href="/" class="header-btn" aria-label="Go to dashboard">🏠 Dashboard</a>
+      <a href="/logout" class="header-btn" aria-label="Log out">🚪 Logout</a>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar" role="complementary" aria-label="User list and controls">
+    <div class="feature-section">
+      <h4>👥 Online Users <span id="userCount">(0)</span></h4>
+      <ul id="userList" aria-live="polite"></ul>
+    </div>
+    <div class="feature-section">
+      <h4>🤖 AI Assistant</h4>
+      <select id="modelSelector" onchange="changeModel()" aria-label="Select AI model">
+        <option value="">Loading models...</option>
+      </select>
+      <div id="modelInfo">
+        <strong>Current Model:</strong>
+        <div id="currentModel">Loading...</div>
+        <div id="userRole" style="margin-top: 10px;"></div>
+      </div>
+    </div>
+    <div class="feature-section">
+      <h4>📎 File Sharing</h4>
+      <div class="drag-drop-area" id="dragDropArea">
+        Drag & drop files here or
+        <br>
+        <button class="feature-btn" onclick="document.getElementById('fileInput').click()" style="margin-top: 10px;" aria-label="Choose file">📁 Choose File</button>
+      </div>
+      <input type="file" id="fileInput" onchange="uploadFile()" accept=".txt,.pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.mp3,.wav,.mp4,.avi" aria-hidden="true">
+    </div>
+    <div class="feature-section">
+      <h4>⚡ Quick Actions</h4>
+      <div class="feature-buttons">
+        <button class="feature-btn" onclick="clearChat()" aria-label="Clear chat">🗑️ Clear Chat</button>
+        <button class="feature-btn" onclick="showHelp()" aria-label="Show help">❓ Help</button>
+        <button class="feature-btn" onclick="getSummary()" aria-label="Get summary">📊 Summary</button>
+        <button class="feature-btn" onclick="getInsights()" aria-label="Get insights">💡 Insights</button>
+        <button class="feature-btn" onclick="toggleSound()" id="soundBtn" aria-label="Toggle sound">🔊 Sound On</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Chat Area -->
+  <div id="main" role="main">
+    <div id="chatBox" role="log" aria-live="polite"></div>
+    <div id="loadingSpinner" style="display: none; margin: 15px auto; text-align: center; color: var(--jarvis-fg); font-weight: 600;">Loading summary...</div>
+    <div id="typingIndicator" aria-live="polite"></div>
+    <div id="errorMessage" role="alert" style="display: none;"></div>
+    <div id="inputArea" role="form">
+      <input 
+        type="text" 
+        id="message" 
+        placeholder="Type a message, '/help' for commands, or @username to mention..." 
+        maxlength="500" 
+        aria-label="Message input"
+        onkeypress="if(event.key === 'Enter') sendMessage()"
+        oninput="startTyping()"
+      />
+      <button id="fileBtn" onclick="document.getElementById('fileInput').click()" aria-label="Upload file">📎</button>
+      <button id="sendBtn" onclick="sendMessage()" aria-label="Send message">📤 Send</button>
+      <button id="jarvisBtn" onclick="askJarvis()" aria-label="Ask Jarvis">🤖 Ask Jarvis</button>
+    </div>
+    
+  </div>
+
+  <script>
+    const socket = io();
+    const username = "{{ username }}";
+    const roomName = "{{ room_name }}";
+    let session_id = "";
+    let userRole = "user";
+    let typingTimer;
+    let isTyping = false;
+    let soundEnabled = true;
+    let currentTypingUsers = new Set();
+    let availableModels = {};
+    let currentModel = "mistralai/mistral-7b-instruct";
+    let isKicked = false;
+    const reactions = ["👍", "😄", "❤️"];
+
+    // Check authentication status
+    async function checkAuth() {
+      try {
+        const response = await fetch("/get_rooms");
+        if (!response.ok) {
+          window.location.href = "/login";
+        }
+      } catch (error) {
+        console.error("Auth check error:", error);
+        window.location.href = "/login";
+      }
+    }
+    document.addEventListener("DOMContentLoaded", () => {
+      checkAuth();
+      const savedTheme = localStorage.getItem("theme") || "light";
+      document.body.dataset.theme = savedTheme;
+      document.getElementById("themeToggle").textContent = savedTheme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+      socket.emit("join_room", { username, room_name: roomName, model: currentModel });
+      document.getElementById("message").focus();
+    });
+
+    // Theme Management
+    function toggleTheme() {
+      const body = document.body;
+      const isDark = body.dataset.theme === "dark";
+      body.dataset.theme = isDark ? "light" : "dark";
+      document.getElementById("themeToggle").textContent = isDark ? "🌙 Dark Mode" : "☀️ Light Mode";
+      localStorage.setItem("theme", body.dataset.theme);
+    }
+
+    socket.on("connect", () => {
+      console.log("Connected to Socket.IO server");
+    });
+
+    socket.on("joined_room", (data) => {
+      session_id = data.session_id;
+      userRole = data.role;
+      availableModels = data.available_models;
+      updateUserList(data.users);
+      setupModelSelector();
+      updateUserInfo();
+      showNotification(`Welcome to ${roomName}! Your role: ${userRole} 🎉`, "success");
+    });
+
+    socket.on("user_list", (data) => {
+      updateUserList(data);
+    });
+
+    socket.on("chat_history", (messages) => {
+      messages.forEach(msg => {
+        appendMessage(msg.username, msg.message, msg.timestamp, msg.type, msg.file_path, msg.file_name, msg.id, msg.reactions);
+      });
+    });
+
+    socket.on("receive_message", (data) => {
+      appendMessage(data.username, data.message, data.timestamp || new Date().toISOString(), data.type, data.file_path, data.file_name, data.id, data.reactions);
+      if (data.username.toLowerCase().includes("jarvis") && soundEnabled) {
+        playSound();
+        showNotification("Jarvis responded!", "info");
+      }
+      if (data.message.includes(`@${username}`) && data.username !== username && soundEnabled) {
+        playSound();
+        showNotification(`${data.username} mentioned you!`, "info");
+      }
+    });
+
+    socket.on("reaction", (data) => {
+      const msgDiv = document.getElementById(`msg-${data.message_id}`);
+      if (msgDiv) {
+        const reactionDiv = msgDiv.querySelector(".reactions");
+        reactionDiv.innerHTML = "";
+        data.reactions.forEach((r) => {
+          const span = document.createElement("span");
+          span.textContent = `${r.emoji} ${r.users.length}`;
+          span.title = `${r.users.join(", ")} reacted with ${r.emoji}`;
+          span.setAttribute("aria-label", `${r.users.join(", ")} reacted with ${r.emoji}`);
+          reactionDiv.appendChild(span);
+        });
+      }
+    });
+
+    socket.on("summary", (data) => {
+      document.getElementById("loadingSpinner").style.display = "none";
+      appendMessage("Jarvis 🤖", data.message, data.timestamp, "ai", null, null, data.id, data.reactions, true);
+    });
+
+    socket.on("kicked", (data) => {
+      if (data.username === username) {
+        isKicked = true;
+        showNotification("You have been kicked from the room!", "error");
+        document.getElementById("message").disabled = true;
+        document.getElementById("sendBtn").disabled = true;
+        document.getElementById("jarvisBtn").disabled = true;
+        document.getElementById("fileBtn").disabled = true;
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 2000);
+      }
+    });
+
+    socket.on("user_typing", (data) => {
+      showTyping(data.username, data.isTyping);
+    });
+
+    socket.on("clear_chat", () => {
+      document.getElementById("chatBox").innerHTML = "";
+      showNotification("Chat cleared!", "info");
+    });
+
+    socket.on("model_changed", (data) => {
+      currentModel = data.model;
+      document.getElementById("currentModel").textContent = data.model_name;
+      showNotification(`Switched to ${data.model_name}`, "success");
+    });
+
+    socket.on("error", (data) => {
+      showNotification(data.message, "error");
+    });
+
+    function setupModelSelector() {
+      const selector = document.getElementById("modelSelector");
+      selector.innerHTML = "";
+      for (const [modelId, modelInfo] of Object.entries(availableModels)) {
+        const option = document.createElement("option");
+        option.value = modelId;
+        option.textContent = modelInfo.name + (modelInfo.free ? " (Free)" : " (Premium)");
+        option.selected = modelId === currentModel;
+        selector.appendChild(option);
+      }
+    }
+
+    function updateUserInfo() {
+      document.getElementById("currentModel").textContent = availableModels[currentModel]?.name || "Unknown";
+      document.getElementById("userRole").innerHTML = `Role: <strong>${userRole}</strong>`;
+    }
+
+    function updateUserList(users) {
+      const ul = document.getElementById("userList");
+      const count = document.getElementById("userCount");
+      ul.innerHTML = "";
+      count.textContent = `(${users.length})`;
+      users.forEach(user => {
+        if (user.username !== username) {
+          const li = document.createElement("li");
+          li.innerHTML = `
+            <div style="display: flex; align-items: center;" onclick="insertMention('${user.username}')" role="button" aria-label="Mention ${user.username}">
+              <span class="online-indicator"></span>
+              ${user.username}
+            </div>
+            <div>
+              <span class="role-badge role-${user.role}">${user.role}</span>
+              ${userRole === 'admin' && user.role !== 'admin' ? `<button class="kick-btn" onclick="kickUser('${user.username}')" aria-label="Kick ${user.username}">Kick</button>` : ''}
+            </div>
+          `;
+          ul.appendChild(li);
+        }
+      });
+    }
+
+    function appendMessage(sender, msg, ts, type = 'user', filePath = null, fileName = null, msgId = null, reactions = [], isSummary = false) {
+      const box = document.getElementById("chatBox");
+      const div = document.createElement("div");
+      div.id = `msg-${msgId}`;
+      let className = `msg ${isSummary ? "summary-msg" : sender.toLowerCase().includes("jarvis") ? "jarvis-msg" : type === "file" ? "file-msg" : type === "system" ? "system-msg" : "user-msg"}`;
+      if (msg.includes(`@${username}`) && sender !== username) {
+        className += " mention-msg";
+      }
+      div.className = className;
+      div.dataset.messageId = msgId;
+
+      const date = new Date(ts);
+      const options = {
+        timeZone: 'Asia/Kolkata',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      };
+      const time = date.toLocaleTimeString('en-US', options);
+
+      let messageContent = msg.replace(/@(\w+)/g, '<span class="mention" onclick="insertMention(\'$1\')" role="button" aria-label="Mention $1">@$1</span>');
+      if (type === 'ai' || isSummary) {
+        messageContent = messageContent.replace(/\n/g, '<br>')
+          .replace(/[-*]\s/g, '<li>')
+          .replace(/<li>(.*?)(\n|$)/g, '<li>$1</li>')
+          .replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>');
+      }
+      if (filePath && fileName) {
+        messageContent += `<div class="file-download" onclick="downloadFile('${filePath}', '${fileName}')" role="button" aria-label="Download ${fileName}">
+          📎 ${fileName} - Click to download
+        </div>`;
+      }
+
+      const modelBadge = type === 'ai' || isSummary ? `<span class="ai-badge">AI</span>` : '';
+      const reactionButtons = reactions.length > 0 || type !== 'system' ? `
+        <div class="reactions">
+          ${reactions.map(r => `<span title="${r.users.join(", ")} reacted with ${r.emoji}" aria-label="${r.users.join(", ")} reacted with ${r.emoji}">${r.emoji} ${r.users.length}</span>`).join('')}
+          <button class="reaction-btn" onclick="addReaction('${msgId}', '👍')" aria-label="React with thumbs up">👍</button>
+          <button class="reaction-btn" onclick="addReaction('${msgId}', '😄')" aria-label="React with smile">😄</button>
+          <button class="reaction-btn" onclick="addReaction('${msgId}', '❤️')" aria-label="React with heart">❤️</button>
+        </div>` : '';
+
+      div.innerHTML = `
+        <div class="msg-header" onclick="insertMention('${sender}')" role="button" aria-label="Mention ${sender}">${sender} ${modelBadge}</div>
+        <div>${messageContent}</div>
+        <span class="timestamp">${time}</span>
+        ${reactionButtons}
+      `;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function addReaction(messageId, emoji) {
+      if (isKicked) return;
+      socket.emit("react", {
+        username,
+        session_id,
+        message_id: messageId,
+        emoji
+      });
+    }
+
+    function insertMention(name) {
+      const input = document.getElementById("message");
+      const current = input.value;
+      const cursorPos = input.selectionStart;
+      const textBefore = current.substring(0, cursorPos);
+      const textAfter = current.substring(cursorPos);
+      input.value = `${textBefore}@${name} ${textAfter}`;
+      input.focus();
+      input.selectionStart = input.selectionEnd = cursorPos + name.length + 2;
+    }
+
+    function kickUser(targetUsername) {
+      if (isKicked) return;
+      if (userRole !== 'admin') {
+        showNotification("Only room admins can kick users", "error");
+        return;
+      }
+      socket.emit("send_message", {
+        username,
+        session_id,
+        message: `/kick ${targetUsername}`
+      });
+    }
+
+    function sendMessage() {
+      if (isKicked) return;
+      const txt = document.getElementById("message");
+      const msg = txt.value.trim(); 
+      txt.value = "";
+      if (!msg || !username) return;
+      stopTyping();
+      socket.emit("send_message", {
+        username,
+        session_id,
+        message: msg,
+        model: currentModel
+      });
+    }
+
+    function askJarvis() {
+      if (isKicked) return;
+      const txt = document.getElementById("message");
+      const msg = txt.value.trim(); 
+      txt.value = "";
+      if (!msg || !username) return;
+      stopTyping();
+      socket.emit("send_message", {
+        username,
+        session_id,
+        message: "jarvis " + msg,
+        model: currentModel,
+        is_summary: false
+      });
+    }
+
+    function changeModel() {
+      if (isKicked) return;
+      const newModel = document.getElementById("modelSelector").value;
+      if (!newModel || newModel === currentModel) return;
+      socket.emit("change_model", {
+        session_id: session_id,
+        model: newModel
+      });
+    }
+
+    function uploadFile() {
+      if (isKicked) return;
+      const fileInput = document.getElementById("fileInput");
+      const file = fileInput.files[0];
+      if (!file) return;
+      if (file.size > 16 * 1024 * 1024) {
+        showNotification("File too large! Max size is 16MB", "error");
+        return;
+      }
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('session_id', session_id);
+      formData.append('username', username);
+      formData.append('room_name', roomName);
+      showNotification("Uploading file...", "info");
+      fetch('/upload', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showNotification("File uploaded successfully!", "success");
+        } else {
+          showNotification(`Upload failed: ${data.error}`, "error");
+        }
+      })
+      .catch(error => {
+        showNotification("Upload failed", "error");
+        console.error('Error:', error);
+      });
+      fileInput.value = '';
+    }
+
+    function downloadFile(filePath, fileName) {
+      if (isKicked) return;
+      const link = document.createElement('a');
+      link.href = `/download/${filePath}`;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      document.getElementById('dragDropArea').addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      document.getElementById('dragDropArea').addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      document.getElementById('dragDropArea').addEventListener(eventName, unhighlight, false);
+    });
+
+    function highlight(e) {
+      document.getElementById('dragDropArea').classList.add('dragover');
+    }
+
+    function unhighlight(e) {
+      document.getElementById('dragDropArea').classList.remove('dragover');
+    }
+
+    document.getElementById('dragDropArea').addEventListener('drop', handleDrop, false);
+
+    function handleDrop(e) {
+      if (isKicked) return;
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files.length > 0) {
+        const fileInput = document.getElementById('fileInput');
+        fileInput.files = files;
+        uploadFile();
+      }
+    }
+
+    function startTyping() {
+      if (isKicked) return;
+      if (!isTyping) {
+        isTyping = true;
+        socket.emit('typing', { username, isTyping: true });
+      }
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(stopTyping, 1000);
+    }
+
+    function stopTyping() {
+      if (isTyping) {
+        isTyping = false;
+        socket.emit('typing', { username, isTyping: false });
+      }
+      clearTimeout(typingTimer);
+    }
+
+    function showTyping(user, typing) {
+      const indicator = document.getElementById('typingIndicator');
+      if (typing) {
+        currentTypingUsers.add(user);
+      } else {
+        currentTypingUsers.delete(user);
+      }
+      if (currentTypingUsers.size > 0) {
+        const users = Array.from(currentTypingUsers);
+        let text = users.join(', ') + (users.length === 1 ? ' is' : ' are') + ' typing';
+        indicator.innerHTML = text + '<span class="typing-dots"><span></span><span></span><span></span></span>';
+      } else {
+        indicator.textContent = '';
+      }
+    }
+
+    function clearChat() {
+      if (isKicked) return;
+      socket.emit("send_message", {
+        username,
+        session_id,
+        message: "/clear"
+      });
+    }
+
+    function showHelp() {
+      if (isKicked) return;
+      socket.emit("send_message", {
+        username,
+        session_id,
+        message: "/help"
+      });
+    }
+
+    function getSummary() {
+      if (isKicked) return;
+      document.getElementById("loadingSpinner").style.display = "block";
+      socket.emit("send_message", {
+        username,
+        session_id,
+        message: "jarvis summarize",
+        is_summary: true
+      });
+    }
+
+    function getInsights() {
+      if (isKicked) return;
+      document.getElementById("loadingSpinner").style.display = "block";
+      socket.emit("send_message", {
+        username,
+        session_id,
+        message: "jarvis insights",
+        is_summary: true
+      });
+    }
+
+    function toggleSound() {
+      if (isKicked) return;
+      soundEnabled = !soundEnabled;
+      const btn = document.getElementById('soundBtn');
+      btn.textContent = soundEnabled ? '🔊 Sound On' : '🔇 Sound Off';
+      showNotification(`Sound ${soundEnabled ? 'enabled' : 'disabled'}`, "info");
+    }
+
+    function playSound() {
+      if (soundEnabled) {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.1);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+      }
+    }
+
+    function showNotification(message, type = 'info') {
+      const notification = document.createElement('div');
+      notification.className = `notification ${type}`;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      setTimeout(() => {
+        notification.style.animation = 'slideInRight 0.4s ease reverse';
+        setTimeout(() => {
+          notification.remove();
+        }, 400);
+      }, 3000);
+    }
+
+    console.log(`🤖 Jarvis Chat Room (${roomName}) loaded successfully!`);
+  </script>
+</body>
+</html>
