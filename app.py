@@ -15,9 +15,9 @@ import logging
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__app__)
 
-app = Flask(__name__)
+app = Flask(__app__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'a_very_secret_key_1234567890')
 app.config['SESSION_COOKIE_NAME'] = 'jarvis_session'
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -1027,7 +1027,7 @@ def handle_disconnect():
             db.session.rollback()
             logger.error(f"Disconnect message error: {e}")
 print("Starting Flask-SocketIO server...")
-if __name__ == "__main__":
+if __app__ == "__app__":
     try:
         print("Starting Flask-SocketIO server...")
         socketio.run(app, host="0.0.0.0", port=5000)
